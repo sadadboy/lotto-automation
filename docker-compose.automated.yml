@@ -1,0 +1,206 @@
+version: '3.8'
+
+services:
+  # 완전 자동화 로또 구매 (즉시 실행)
+  lotto-automated:
+    build:
+      context: .
+      dockerfile: Dockerfile.optimized
+    container_name: lotto-automated
+    environment:
+      # 필수 환경변수 (Docker secrets 또는 .env 파일에서 설정)
+      - LOTTO_USER_ID=${LOTTO_USER_ID}
+      - LOTTO_PASSWORD=${LOTTO_PASSWORD}
+      
+      # 선택적 환경변수 (기본값 적용)
+      - LOTTO_PURCHASE_COUNT=${LOTTO_PURCHASE_COUNT:-5}
+      - LOTTO_AUTO_RECHARGE=${LOTTO_AUTO_RECHARGE:-true}
+      - LOTTO_RECHARGE_AMOUNT=${LOTTO_RECHARGE_AMOUNT:-10000}
+      - LOTTO_MIN_BALANCE=${LOTTO_MIN_BALANCE:-5000}
+      - LOTTO_HEADLESS=${LOTTO_HEADLESS:-true}
+      - LOTTO_SCREENSHOT=${LOTTO_SCREENSHOT:-true}
+      - LOTTO_DEBUG=${LOTTO_DEBUG:-false}
+      
+      # 시스템 환경변수
+      - TZ=Asia/Seoul
+      - PYTHONUNBUFFERED=1
+      - DOCKER_ENV=true
+      
+      # Discord 알림 (선택사항)
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      
+    volumes:
+      # 로그 및 스크린샷 저장
+      - lotto-logs:/app/logs
+      - lotto-screenshots:/app/screenshots
+      
+      # 설정 파일 (읽기 전용)
+      - ./lotto_config.json:/app/lotto_config.json:ro
+      
+      # 크롬 공유 메모리 (성능 최적화)
+      - /dev/shm:/dev/shm
+      
+      # 시간대 설정
+      - /etc/localtime:/etc/localtime:ro
+      
+    # Docker secrets 사용 (보안 강화)
+    secrets:
+      - lotto_user_id
+      - lotto_password
+      
+    networks:
+      - lotto-network
+      
+    # 한 번 실행 후 종료
+    restart: "no"
+    
+    # 실행 프로파일
+    profiles:
+      - immediate
+      
+    # 리소스 제한
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # 로깅 설정
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+        
+    # 헬스체크
+    healthcheck:
+      test: ["/app/healthcheck.sh"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 30s
+
+  # 스케줄 기반 자동 실행 (크론)
+  lotto-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.optimized
+    container_name: lotto-scheduler
+    environment:
+      # 동일한 환경변수
+      - LOTTO_USER_ID=${LOTTO_USER_ID}
+      - LOTTO_PASSWORD=${LOTTO_PASSWORD}
+      - LOTTO_PURCHASE_COUNT=${LOTTO_PURCHASE_COUNT:-5}
+      - LOTTO_AUTO_RECHARGE=${LOTTO_AUTO_RECHARGE:-true}
+      - LOTTO_RECHARGE_AMOUNT=${LOTTO_RECHARGE_AMOUNT:-10000}
+      - LOTTO_MIN_BALANCE=${LOTTO_MIN_BALANCE:-5000}
+      - LOTTO_HEADLESS=true  # 스케줄러는 항상 헤드리스
+      - LOTTO_SCREENSHOT=true
+      - LOTTO_DEBUG=${LOTTO_DEBUG:-false}
+      - TZ=Asia/Seoul
+      - PYTHONUNBUFFERED=1
+      - DOCKER_ENV=true
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      
+      # 크론 스케줄 설정 (환경변수로 커스터마이즈 가능)
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-0 14 * * 1,4}  # 매주 월, 목 14시
+      
+    volumes:
+      - lotto-logs:/app/logs
+      - lotto-screenshots:/app/screenshots
+      - ./lotto_config.json:/app/lotto_config.json:ro
+      - /dev/shm:/dev/shm
+      - /etc/localtime:/etc/localtime:ro
+      
+    secrets:
+      - lotto_user_id
+      - lotto_password
+      
+    networks:
+      - lotto-network
+      
+    # 크론 서비스이므로 계속 실행
+    restart: unless-stopped
+    
+    profiles:
+      - scheduler
+      
+    # 크론 명령어 실행
+    command: >
+      sh -c "
+        echo 'Setting up cron job...'
+        echo '$$CRON_SCHEDULE cd /app && /app/entrypoint.sh --now >> /app/logs/cron.log 2>&1' | crontab -
+        echo 'Starting cron daemon...'
+        cron
+        echo 'Cron started. Monitoring logs...'
+        tail -f /app/logs/cron.log
+      "
+      
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "10"
+
+  # 로그 모니터링 및 대시보드 (선택사항)
+  lotto-monitor:
+    image: nginx:alpine
+    container_name: lotto-monitor
+    ports:
+      - "${MONITOR_PORT:-8080}:80"
+    volumes:
+      - lotto-logs:/usr/share/nginx/html/logs:ro
+      - lotto-screenshots:/usr/share/nginx/html/screenshots:ro
+      - ./monitoring/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - lotto-network
+    restart: unless-stopped
+    profiles:
+      - monitor
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+# 네트워크 설정
+networks:
+  lotto-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# 영구 볼륨 설정
+volumes:
+  lotto-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/logs
+  lotto-screenshots:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/screenshots
+
+# Docker Secrets 설정 (production 환경용)
+secrets:
+  lotto_user_id:
+    file: ./secrets/lotto_user_id.txt
+  lotto_password:
+    file: ./secrets/lotto_password.txt

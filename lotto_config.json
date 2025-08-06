@@ -1,0 +1,105 @@
+{
+  "purchase": {
+    "count": 5,
+    "lotto_list": [
+      {
+        "type": "자동",
+        "numbers": []
+      },
+      {
+        "type": "반자동",
+        "numbers": [
+          6,
+          11,
+          18
+        ]
+      },
+      {
+        "type": "수동(랜덤)",
+        "numbers": [
+          11,
+          13,
+          22,
+          23,
+          26,
+          31
+        ]
+      },
+      {
+        "type": "수동(AI추천)",
+        "numbers": []
+      },
+      {
+        "type": "수동(통계분석)",
+        "numbers": []
+      }
+    ]
+  },
+  "payment": {
+    "auto_recharge": true,
+    "recharge_amount": 10000,
+    "min_balance": 30000,
+    "recharge_method": "easy_charge"
+  },
+  "schedule": {
+    "enabled": false,
+    "day": "friday",
+    "time": "14:00"
+  },
+  "options": {
+    "headless": false,
+    "wait_time": 2,
+    "retry_count": 3,
+    "auto_check_winning": true,
+    "save_screenshot": true
+  },
+  "notifications": {
+    "discord": {
+      "enabled": true,
+      "webhook_url": "https://discord.com/api/webhooks/1392528407685894146/rwSBXQfFEeck2XWHbx91QHgMMyiQrW46p4QojCIUxSonhYHIEbjLN-FRD0cjEa5cAVzR",
+      "notify_login": true,
+      "notify_balance": true,
+      "notify_recharge": true,
+      "notify_purchase": true,
+      "notify_errors": true
+    },
+    "telegram": {
+      "enabled": false,
+      "bot_token": "",
+      "chat_id": ""
+    },
+    "email": {
+      "enabled": false,
+      "smtp_server": "smtp.gmail.com",
+      "smtp_port": 587,
+      "username": "",
+      "password": "",
+      "to_email": ""
+    }
+  },
+  "statistics": {
+    "update_winning_numbers": true,
+    "analysis_period": 100,
+    "ai_weight_recent": 0.7,
+    "ai_weight_frequency": 0.3
+  },
+  "security": {
+    "credentials_file": "credentials.enc",
+    "auto_save_credentials": true,
+    "session_timeout": 1800
+  },
+  "deployment": {
+    "mode": "cli",
+    "web_port": 8080,
+    "web_host": "127.0.0.1",
+    "use_docker": false,
+    "docker": {
+      "selenium_grid_url": "http://selenium-hub:4444/wd/hub",
+      "volume_mapping": {
+        "config": "/app/config",
+        "logs": "/app/logs",
+        "screenshots": "/app/screenshots"
+      }
+    }
+  }
+}

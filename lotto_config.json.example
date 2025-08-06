@@ -1,0 +1,84 @@
+{
+  "login": {
+    "user_id": "YOUR_ID_HERE",
+    "password": "YOUR_PASSWORD_HERE"
+  },
+  "purchase": {
+    "count": 5,
+    "lotto_list": [
+      {
+        "type": "자동",
+        "numbers": []
+      },
+      {
+        "type": "반자동",
+        "numbers": [6, 11, 18]
+      },
+      {
+        "type": "수동(랜덤)",
+        "numbers": [11, 13, 22, 23, 26, 31]
+      },
+      {
+        "type": "수동(AI추천)",
+        "numbers": []
+      },
+      {
+        "type": "수동(통계분석)",
+        "numbers": []
+      }
+    ]
+  },
+  "payment": {
+    "auto_recharge": false,
+    "recharge_amount": 50000,
+    "min_balance": 5000,
+    "recharge_method": "account_transfer",
+    "bank_info": {
+      "bank_name": "",
+      "account_number": "",
+      "account_password": ""
+    }
+  },
+  "schedule": {
+    "enabled": false,
+    "day": "friday",
+    "time": "14:00"
+  },
+  "options": {
+    "headless": false,
+    "wait_time": 2,
+    "retry_count": 3,
+    "auto_check_winning": true,
+    "save_screenshot": true
+  },
+  "notification": {
+    "telegram": {
+      "enabled": false,
+      "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "chat_id": "YOUR_TELEGRAM_CHAT_ID"
+    },
+    "email": {
+      "enabled": false,
+      "smtp_server": "smtp.gmail.com",
+      "smtp_port": 587,
+      "username": "your_email@gmail.com",
+      "password": "your_app_password",
+      "to_email": "recipient@gmail.com"
+    }
+  },
+  "statistics": {
+    "update_winning_numbers": true,
+    "analysis_period": 100,
+    "ai_weight_recent": 0.7,
+    "ai_weight_frequency": 0.3
+  },
+  "docker": {
+    "use_docker_env": true,
+    "selenium_grid_url": "http://selenium-hub:4444/wd/hub",
+    "volume_mapping": {
+      "config": "/app/config",
+      "logs": "/app/logs",
+      "screenshots": "/app/screenshots"
+    }
+  }
+}

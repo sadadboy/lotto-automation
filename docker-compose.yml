@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # 즉시 실행용 서비스
+  lotto-auto-buyer:
+    build: .
+    container_name: lotto-auto-buyer
+    environment:
+      - LOTTO_MASTER_PASSWORD=${LOTTO_MASTER_PASSWORD:-}
+      - TZ=Asia/Seoul
+      - DISPLAY=:99
+    volumes:
+      - ./credentials.enc:/app/credentials.enc:ro
+      - ./lotto_config.json:/app/lotto_config.json:ro
+      - ./logs:/app/logs
+      - /dev/shm:/dev/shm  # Chrome 공유 메모리
+    networks:
+      - lotto-network
+    restart: "no"  # 한 번 실행 후 종료
+    profiles:
+      - manual  # 수동 실행용
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 스케줄 실행용 서비스 (크론)
+  lotto-scheduler:
+    build: .
+    container_name: lotto-scheduler
+    environment:
+      - LOTTO_MASTER_PASSWORD=${LOTTO_MASTER_PASSWORD:-}
+      - TZ=Asia/Seoul
+      - DISPLAY=:99
+    volumes:
+      - ./credentials.enc:/app/credentials.enc:ro
+      - ./lotto_config.json:/app/lotto_config.json:ro
+      - ./logs:/app/logs
+      - /dev/shm:/dev/shm
+    networks:
+      - lotto-network
+    command: >
+      sh -c "
+        echo '0 14 * * 1,4 /app/run-lotto.sh' | crontab -
+        echo 'LOTTO_MASTER_PASSWORD=$${LOTTO_MASTER_PASSWORD}' >> /etc/environment
+        cron && tail -f /app/logs/cron.log
+      "
+    restart: unless-stopped
+    profiles:
+      - scheduler  # 스케줄러용
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 웹 대시보드 (선택사항)
+  lotto-dashboard:
+    build: .
+    container_name: lotto-dashboard
+    environment:
+      - LOTTO_MASTER_PASSWORD=${LOTTO_MASTER_PASSWORD:-}
+      - TZ=Asia/Seoul
+    volumes:
+      - ./credentials.enc:/app/credentials.enc:ro
+      - ./lotto_config.json:/app/lotto_config.json:ro
+      - ./logs:/app/logs
+    ports:
+      - "8080:8080"
+    networks:
+      - lotto-network
+    command: python -m http.server 8080  # 간단한 파일 서버
+    restart: unless-stopped
+    profiles:
+      - dashboard  # 대시보드용
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  lotto-network:
+    driver: bridge
+
+# Docker Secrets 지원
+secrets:
+  master_password:
+    external: true

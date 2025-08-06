@@ -1,0 +1,42 @@
+# requirements.txt - 로또 자동구매 시스템 의존성
+selenium==4.15.2
+numpy==1.24.3
+python-dateutil==2.8.2
+requests==2.31.0
+
+# 웹 드라이버 관리
+webdriver-manager==4.0.1
+
+# 로깅 및 설정
+python-dotenv==1.0.0
+
+# 암호화
+cryptography==41.0.7
+
+# Discord 알림
+aiohttp==3.9.0
+
+# GUI 대시보드 (Flask 기반)
+flask==3.0.0
+flask-cors==4.0.0
+flask-socketio==5.3.5
+python-socketio==5.10.0
+
+# 스케줄링
+schedule==1.2.0
+APScheduler==3.10.4
+
+# 데이터베이스 (선택사항)
+# sqlite3는 Python 기본 내장
+
+# 알림 기능 (선택사항)
+# python-telegram-bot==20.7
+# secure-smtplib==0.1.1
+
+# Docker 관련
+# docker==7.0.0
+# docker-compose==1.29.2
+
+# 테스트
+pytest==7.4.3
+pytest-mock==3.12.0

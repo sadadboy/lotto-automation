@@ -1,0 +1,63 @@
+# docker-compose.arm.yml - ARM 아키텍처(오라클 클라우드)용
+version: '3.8'
+
+services:
+  lotto-buyer:
+    build: 
+      context: .
+      dockerfile: Dockerfile.arm
+    container_name: lotto-auto-buyer
+    environment:
+      - DOCKER_ENV=true
+      - TZ=Asia/Seoul
+      - DISPLAY=:99
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./screenshots:/app/screenshots
+      - ./data:/app/data
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    networks:
+      - lotto-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    
+  # GUI 대시보드 서비스
+  lotto-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.arm
+    container_name: lotto-dashboard
+    command: python dashboard.py
+    environment:
+      - FLASK_ENV=production
+      - TZ=Asia/Seoul
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./screenshots:/app/screenshots
+      - ./data:/app/data
+    ports:
+      - "5001:5000"
+    restart: unless-stopped
+    networks:
+      - lotto-network
+    depends_on:
+      - lotto-buyer
+
+networks:
+  lotto-network:
+    driver: bridge
+
+volumes:
+  lotto-data:
+  lotto-logs:
+  lotto-screenshots:

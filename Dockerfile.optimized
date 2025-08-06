@@ -1,0 +1,156 @@
+# 멀티스테이지 빌드로 최적화된 Dockerfile
+FROM python:3.11-slim as builder
+
+# 빌드 종속성 설치
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    unzip \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Chrome 및 ChromeDriver 설치 (고정 버전)
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
+
+# ChromeDriver 직접 설치 (최신 안정 버전)
+RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d. -f1-3) \
+    && CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}") \
+    && wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip" \
+    && unzip chromedriver_linux64.zip \
+    && mv chromedriver /usr/local/bin/ \
+    && chmod +x /usr/local/bin/chromedriver \
+    && rm chromedriver_linux64.zip
+
+# 실행 스테이지
+FROM python:3.11-slim
+
+# 환경 변수 설정 (도커 최적화)
+ENV DEBIAN_FRONTEND=noninteractive \
+    DISPLAY=:99 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DOCKER_ENV=true \
+    LOTTO_HEADLESS=true \
+    LOTTO_SCREENSHOT=true
+
+# 시스템 사용자 생성 (보안 강화)
+RUN groupadd -r lotto && useradd -r -g lotto -s /bin/false lotto
+
+# 런타임 종속성 설치
+RUN apt-get update && apt-get install -y \
+    # Chrome 런타임 종속성
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libatspi2.0-0 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libxss1 \
+    libxtst6 \
+    # 가상 디스플레이 (헤드리스 환경용)
+    xvfb \
+    # 크론 및 유틸리티
+    cron \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Chrome과 ChromeDriver 복사
+COPY --from=builder /opt/google/chrome /opt/google/chrome
+COPY --from=builder /usr/local/bin/chromedriver /usr/local/bin/chromedriver
+COPY --from=builder /usr/bin/google-chrome /usr/bin/google-chrome
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# Python 의존성 설치
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 애플리케이션 파일 복사
+COPY lotto_automated.py .
+COPY auto_recharge.py .
+COPY discord_notifier.py .
+COPY credential_manager.py .
+COPY lotto_config.json.example ./lotto_config.json
+
+# 디렉토리 생성 및 권한 설정
+RUN mkdir -p /app/logs /app/screenshots /app/config \
+    && chown -R lotto:lotto /app
+
+# 환경별 실행 스크립트 생성
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+# 환경변수 검증\n\
+if [ -z "$LOTTO_USER_ID" ] || [ -z "$LOTTO_PASSWORD" ]; then\n\
+    echo "❌ 필수 환경변수가 설정되지 않았습니다."\n\
+    echo "   LOTTO_USER_ID와 LOTTO_PASSWORD를 설정하세요."\n\
+    exit 1\n\
+fi\n\
+\n\
+# 가상 디스플레이 시작 (헤드리스가 아닌 경우)\n\
+if [ "$LOTTO_HEADLESS" != "true" ]; then\n\
+    export DISPLAY=:99\n\
+    Xvfb :99 -screen 0 1920x1080x24 &\n\
+    sleep 2\n\
+fi\n\
+\n\
+# 로그 디렉토리 확인\n\
+mkdir -p /app/logs\n\
+\n\
+# 메인 애플리케이션 실행\n\
+cd /app\n\
+python lotto_automated.py "$@"\n\
+' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+# 크론 작업을 위한 스크립트
+RUN echo '#!/bin/bash\n\
+cd /app\n\
+source /app/entrypoint.sh --now >> /app/logs/cron.log 2>&1\n\
+' > /app/run-cron.sh && chmod +x /app/run-cron.sh
+
+# 헬스체크 스크립트
+RUN echo '#!/bin/bash\n\
+# 기본 Python 실행 가능 여부 확인\n\
+python -c "import sys; print(f\"Python {sys.version}\")" > /dev/null || exit 1\n\
+\n\
+# 크리티컬 모듈 import 가능 여부 확인\n\
+python -c "from selenium import webdriver" > /dev/null || exit 1\n\
+\n\
+# 로그 디렉토리 쓰기 권한 확인\n\
+touch /app/logs/healthcheck.tmp && rm -f /app/logs/healthcheck.tmp || exit 1\n\
+\n\
+echo "✅ 헬스체크 통과"\n\
+' > /app/healthcheck.sh && chmod +x /app/healthcheck.sh
+
+# 사용자 전환
+USER lotto
+
+# 헬스체크 설정
+HEALTHCHECK --interval=60s --timeout=30s --start-period=30s --retries=3 \
+    CMD /app/healthcheck.sh
+
+# 볼륨 마운트 포인트
+VOLUME ["/app/logs", "/app/screenshots", "/app/config"]
+
+# 포트 노출 (웹 인터페이스용 - 선택사항)
+EXPOSE 8080
+
+# 엔트리포인트 설정
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# 기본 명령어 (즉시 실행)
+CMD ["--now"]
